@@ -56,8 +56,8 @@ async def process_signal(request: Request):
     • R:R Ratio: 1:2
     • Trade Notes: [Key confirmation factor]
     """
-
-    @retry(
+    
+@retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=2, min=4, max=15),
     retry=retry_if_exception_type(ServerError)
