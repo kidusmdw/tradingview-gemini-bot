@@ -9,6 +9,18 @@ app = FastAPI()
 # Initialize Gemini Client (reads API key from host environment variables)
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+# 1. Helper function with retry logic placed at the module level (0 indentation)
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=4, max=15),
+    retry=retry_if_exception_type(ServerError)
+)
+def call_gemini(prompt_text: str):
+    return client.models.generate_content(
+        model='gemini-3.8-flash',
+        contents=prompt_text
+    )
+
 @app.post("/high-winrate-signal")
 async def process_signal(request: Request):
     data = await request.json()
@@ -21,7 +33,7 @@ async def process_signal(request: Request):
     tp_pips = float(data.get("tp_pips", 40))
     rsi = float(data.get("rsi", 50))
     
-    # 1. Enforce strict timeframe rule (15m and above only)
+    # Enforce strict timeframe rule (15m and above only)
     tf_minutes = int(timeframe) if str(timeframe).isdigit() else 15
     if tf_minutes < 15:
         return {"status": "rejected", "reason": "Timeframes under 15 minutes are disabled for high win rate."}
@@ -57,18 +69,7 @@ async def process_signal(request: Request):
     • Trade Notes: [Key confirmation factor]
     """
     
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=2, min=4, max=15),
-    retry=retry_if_exception_type(ServerError)
-)
-def call_gemini(prompt_text: str):
-    return client.models.generate_content(
-        model='gemini-3.8-flash',
-        contents=prompt_text
-    )
-
-# Then call it like this:
-response = call_gemini(prompt)
-
+    # Call the retry-wrapped function safely inside the route handler
+    response = call_gemini(prompt)
+    
     return {"status": "approved", "signal_card": response.text}
