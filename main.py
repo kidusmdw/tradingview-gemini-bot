@@ -1,5 +1,7 @@
 from fastapi import FastAPI, Request
 from google import genai
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from google.genai.errors import ServerError
 import os
 
 app = FastAPI()
@@ -55,9 +57,18 @@ async def process_signal(request: Request):
     • Trade Notes: [Key confirmation factor]
     """
 
-    response = client.models.generate_content(
+    @retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=4, max=15),
+    retry=retry_if_exception_type(ServerError)
+)
+def call_gemini(prompt_text: str):
+    return client.models.generate_content(
         model='gemini-3.8-flash',
-        contents=prompt
+        contents=prompt_text
     )
+
+# Then call it like this:
+response = call_gemini(prompt)
 
     return {"status": "approved", "signal_card": response.text}
